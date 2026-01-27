@@ -27,7 +27,7 @@ Based on [Xorm Drivers Support](https://gitea.com/xorm/xorm#drivers-support), Th
 package main
 
 import (
-	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v3"
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/casbin/xorm-adapter/v3"
@@ -67,7 +67,7 @@ func main() {
 package main
 
 import (
-	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v3"
 	_ "github.com/lib/pq"
 
 	"github.com/casbin/xorm-adapter/v3"
