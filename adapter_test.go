@@ -19,15 +19,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/util"
+	"github.com/casbin/casbin/v3"
+	"github.com/casbin/casbin/v3/util"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
 
 func testGetPolicy(t *testing.T, e *casbin.Enforcer, res [][]string) {
 	t.Helper()
-	myRes := e.GetPolicy()
+	myRes, err := e.GetPolicy()
+	if err != nil {
+		t.Fatalf("GetPolicy failed: %v", err)
+	}
 	log.Print("Policy: ", myRes)
 
 	m := make(map[string]bool, len(res))
@@ -311,7 +314,10 @@ func testUpdateFilteredPolicies(t *testing.T, a *Adapter) {
 }
 
 func testGetPolicyWithoutOrder(t *testing.T, e *casbin.Enforcer, res [][]string) {
-	myRes := e.GetPolicy()
+	myRes, err := e.GetPolicy()
+	if err != nil {
+		t.Fatalf("GetPolicy failed: %v", err)
+	}
 	log.Print("Policy: ", myRes)
 
 	if !arrayEqualsWithoutOrder(myRes, res) {
