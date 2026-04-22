@@ -21,8 +21,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/casbin/casbin/v2/model"
-	"github.com/casbin/casbin/v2/persist"
+	"github.com/casbin/casbin/v3/model"
+	"github.com/casbin/casbin/v3/persist"
 	"github.com/lib/pq"
 	"xorm.io/xorm"
 )
@@ -249,7 +249,7 @@ func (a *Adapter) dropTable() error {
 	return a.engine.DropTables(&CasbinRule{tableName: a.getFullTableName()})
 }
 
-func loadPolicyLine(line *CasbinRule, model model.Model) {
+func loadPolicyLine(line *CasbinRule, model model.Model) error {
 	var p = []string{line.Ptype,
 		line.V0, line.V1, line.V2, line.V3, line.V4, line.V5}
 	var lineText string
@@ -267,7 +267,7 @@ func loadPolicyLine(line *CasbinRule, model model.Model) {
 		lineText = strings.Join(p[:2], ", ")
 	}
 
-	persist.LoadPolicyLine(lineText, model)
+	return persist.LoadPolicyLine(lineText, model)
 }
 
 // LoadPolicy loads policy from database.
@@ -284,7 +284,9 @@ func (a *Adapter) LoadPolicyCtx(ctx context.Context, model model.Model) error {
 	}
 
 	for _, line := range lines {
-		loadPolicyLine(line, model)
+		if err := loadPolicyLine(line, model); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -458,7 +460,9 @@ func (a *Adapter) LoadFilteredPolicy(model model.Model, filter interface{}) erro
 	}
 
 	for _, line := range lines {
-		loadPolicyLine(line, model)
+		if err := loadPolicyLine(line, model); err != nil {
+			return err
+		}
 	}
 	a.isFiltered = true
 	return nil
