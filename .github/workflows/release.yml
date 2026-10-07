@@ -1,0 +1,97 @@
+name: Release
+
+# Releases are cut by hand: nothing here runs on a merge, only on a pushed tag.
+#
+#   v3.7.0-rc1  ->  GitHub pre-release (the candidate put up for the Apache vote)
+#   v3.7.0      ->  GitHub release; Go users pick the module up from the tag
+#
+# Either way the release carries an Apache-style source tarball as its only
+# asset. The release manager downloads that tarball and signs / checksums it
+# locally before starting the vote; nothing is signed or uploaded here.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  # Base name of the source release artifact, per Apache naming conventions.
+  ARTIFACT_BASENAME: apache-casbin-xorm-adapter
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name }}
+    if: github.repository == 'apache/casbin-xorm-adapter'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version from tag
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          # v3.7.0-rc1 -> 3.7.0. The tarball the PPMC votes on is the exact tarball
+          # that ships, so the candidate counter is never part of its name.
+          BASE_VERSION="${VERSION%%-rc*}"
+          if [ "$VERSION" = "$BASE_VERSION" ]; then
+            PRERELEASE=false
+          else
+            PRERELEASE=true
+          fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+            echo "::error::Tag $GITHUB_REF_NAME is not vX.Y.Z or vX.Y.Z-rcN."
+            exit 1
+          fi
+          {
+            echo "base_version=$BASE_VERSION"
+            echo "prerelease=$PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
+          echo "Tag $GITHUB_REF_NAME -> version $BASE_VERSION (pre-release: $PRERELEASE)"
+
+      - name: Verify go.mod matches the tag
+        run: |
+          set -euo pipefail
+          # Go resolves vN.x.y tags (N >= 2) only for a module whose path ends in
+          # /vN, and v0 / v1 tags only for a module without such a suffix.
+          MODULE="$(awk '/^module /{print $2; exit}' go.mod)"
+          MAJOR="${GITHUB_REF_NAME#v}"
+          MAJOR="${MAJOR%%.*}"
+          if [[ "${MODULE##*/}" =~ ^v([0-9]+)$ ]]; then
+            OK=$([ "$MAJOR" = "${BASH_REMATCH[1]}" ] && echo true || echo false)
+          else
+            OK=$([ "$MAJOR" -le 1 ] && echo true || echo false)
+          fi
+          if [ "$OK" != true ]; then
+            echo "::error::go.mod declares $MODULE but the tag is $GITHUB_REF_NAME."
+            exit 1
+          fi
+
+      - name: Build source release tarball
+        id: package
+        run: |
+          set -euo pipefail
+          NAME="${ARTIFACT_BASENAME}-${{ steps.version.outputs.base_version }}-incubating-src"
+          ASSET="${RUNNER_TEMP}/${NAME}.tar.gz"
+          # git archive gives us exactly the tracked sources at this tag, unpacking
+          # into a single top-level directory named after the release.
+          git archive --format=tar.gz --prefix="$NAME/" -o "$ASSET" HEAD
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+          ls -l "$ASSET"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          ASSET: ${{ steps.package.outputs.asset }}
+        run: |
+          set -euo pipefail
+          FLAGS=(--title "$TAG" --generate-notes)
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then
+            FLAGS+=(--prerelease)
+          fi
+          gh release create "$TAG" "$ASSET" "${FLAGS[@]}"
